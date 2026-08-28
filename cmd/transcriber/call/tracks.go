@@ -145,6 +145,7 @@ func (t *Transcriber) processLiveTrack(track trackRemote, sessionID string) {
 		}()
 
 		if t.cfg.TranscribeAPI == config.TranscribeAPIParakeet {
+			t.liveCaptionsWg.Add(1)
 			go t.processLiveCaptionsNemotron(ctx, pktPayloadCh)
 		} else {
 			go t.processLiveCaptionsForTrack(ctx, pktPayloadCh)
@@ -266,6 +267,8 @@ func (t *Transcriber) handleClose() error {
 
 	t.captionsPoolWg.Wait()
 	if t.liveASR != nil {
+		t.liveCaptionsWg.Wait()
+		t.liveASRWg.Wait()
 		_ = t.liveASR.Destroy()
 		t.liveASR = nil
 	}

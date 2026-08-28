@@ -32,8 +32,7 @@ func (t *Transcriber) initNemotronLiveCaptions() error {
 }
 
 func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsCh <-chan []byte) {
-	t.captionsPoolWg.Add(1)
-	defer t.captionsPoolWg.Done()
+	defer t.liveCaptionsWg.Done()
 
 	if t.liveASR == nil {
 		slog.Error("processLiveCaptionsNemotron: recognizer is not initialized",
@@ -54,8 +53,10 @@ func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsC
 		}
 	}()
 
+	t.liveASRWg.Add(1)
 	stream, err := t.liveASR.StartStream(t.cfg.LiveCaptionsLanguage)
 	if err != nil {
+		t.liveASRWg.Done()
 		slog.Error("processLiveCaptionsNemotron: failed to start stream",
 			slog.String("err", err.Error()), slog.String("trackID", ctx.trackID))
 		return
@@ -64,6 +65,7 @@ func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsC
 		_ = stream.Finish()
 		t.drainCaptionStream(ctx, stream)
 		stream.Close()
+		t.liveASRWg.Done()
 	}()
 
 	pcmBuf := make([]float32, trackOutFrameSize)

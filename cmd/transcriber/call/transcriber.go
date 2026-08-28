@@ -50,6 +50,8 @@ type Transcriber struct {
 	captionsPoolWg      sync.WaitGroup
 	captionsPoolDoneCh  chan struct{}
 	liveASR             *nemospeech.Recognizer
+	liveCaptionsWg      sync.WaitGroup // parakeet live-caption goroutines (one per track)
+	liveASRWg           sync.WaitGroup // active NeMo streams (must finish before Destroy)
 }
 
 func NewTranscriber(cfg config.CallTranscriberConfig, dataPath string) (t *Transcriber, retErr error) {
