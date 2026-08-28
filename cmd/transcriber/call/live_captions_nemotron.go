@@ -11,7 +11,15 @@ import (
 	"github.com/mattermost/mattermost-plugin-calls/server/public"
 )
 
-const liveCaptionsDrainTick = 200 * time.Millisecond
+const (
+	liveCaptionsDrainTick      = 200 * time.Millisecond
+	minNemotronCaptionInterval = 100 * time.Millisecond
+)
+
+type nemotronCaptionState struct {
+	prevText string
+	lastSend time.Time
+}
 
 func (t *Transcriber) initNemotronLiveCaptions() error {
 	rec, err := nemospeech.NewRecognizer(nemospeech.RecognizerConfig{
@@ -25,9 +33,15 @@ func (t *Transcriber) initNemotronLiveCaptions() error {
 		return err
 	}
 	t.liveASR = rec
+	n := t.cfg.LiveCaptionsNumTranscribers
+	if n < 1 {
+		n = 1
+	}
+	t.liveASRSlots = make(chan struct{}, n)
 	slog.Info("nemotron live captions recognizer ready",
 		slog.String("language", t.cfg.LiveCaptionsLanguage),
-		slog.Int("rnnt_right_context", t.cfg.LiveCaptionsRNNTRightContext))
+		slog.Int("rnnt_right_context", t.cfg.LiveCaptionsRNNTRightContext),
+		slog.Int("max_streams", n))
 	return nil
 }
 
@@ -63,7 +77,7 @@ func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsC
 	}
 	defer func() {
 		_ = stream.Finish()
-		t.drainCaptionStream(ctx, stream)
+		t.drainCaptionStream(ctx, stream, &nemotronCaptionState{}, 0)
 		stream.Close()
 		t.liveASRWg.Done()
 	}()
@@ -72,20 +86,29 @@ func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsC
 	pcm := make([]float32, 0, trackOutAudioRate)
 	ticker := time.NewTicker(liveCaptionsDrainTick)
 	defer ticker.Stop()
+	captionState := &nemotronCaptionState{}
 
 	flush := func() {
+		newAudioLenMs := float64(len(pcm)) * 1000 / float64(trackOutAudioRate)
 		if len(pcm) == 0 {
-			t.drainCaptionStream(ctx, stream)
+			t.drainCaptionStream(ctx, stream, captionState, 0)
 			return
 		}
 		if err := stream.Push(pcm, trackOutAudioRate); err != nil {
 			slog.Error("processLiveCaptionsNemotron: push failed",
 				slog.String("err", err.Error()), slog.String("trackID", ctx.trackID))
+			if err := t.client.SendWS(wsEvMetric, public.MetricMsg{
+				SessionID:  ctx.sessionID,
+				MetricName: public.MetricLiveCaptionsTranscriberBufFull,
+			}, false); err != nil {
+				slog.Error("processLiveCaptionsNemotron: error sending wsEvMetric MetricLiveCaptionsTranscriberBufFull",
+					slog.String("err", err.Error()), slog.String("trackID", ctx.trackID))
+			}
 			pcm = pcm[:0]
 			return
 		}
 		pcm = pcm[:0]
-		t.drainCaptionStream(ctx, stream)
+		t.drainCaptionStream(ctx, stream, captionState, newAudioLenMs)
 	}
 
 	for {
@@ -115,9 +138,9 @@ func (t *Transcriber) processLiveCaptionsNemotron(ctx trackContext, pktPayloadsC
 	}
 }
 
-func (t *Transcriber) drainCaptionStream(ctx trackContext, stream *nemospeech.Stream) {
+func (t *Transcriber) drainCaptionStream(ctx trackContext, stream *nemospeech.Stream, state *nemotronCaptionState, newAudioLenMs float64) {
 	for {
-		text, _, ok, err := stream.Next()
+		text, isFinal, ok, err := stream.Next()
 		if err != nil {
 			slog.Error("processLiveCaptionsNemotron: next failed",
 				slog.String("err", err.Error()), slog.String("trackID", ctx.trackID))
@@ -127,14 +150,33 @@ func (t *Transcriber) drainCaptionStream(ctx trackContext, stream *nemospeech.St
 			return
 		}
 		if text == "" {
+			if isFinal {
+				state.prevText = ""
+			}
+			continue
+		}
+		if text == state.prevText {
+			if isFinal {
+				state.prevText = ""
+			}
+			continue
+		}
+		if !isFinal && !state.lastSend.IsZero() && time.Since(state.lastSend) < minNemotronCaptionInterval {
 			continue
 		}
 		if err := t.client.SendWS(wsEvCaption, public.CaptionMsg{
-			SessionID: ctx.sessionID,
-			Text:      text,
+			SessionID:     ctx.sessionID,
+			Text:          text,
+			NewAudioLenMs: newAudioLenMs,
 		}, false); err != nil {
 			slog.Error("processLiveCaptionsNemotron: error sending ws captions",
 				slog.String("err", err.Error()), slog.String("trackID", ctx.trackID))
+			return
+		}
+		state.prevText = text
+		state.lastSend = time.Now()
+		if isFinal {
+			state.prevText = ""
 		}
 	}
 }

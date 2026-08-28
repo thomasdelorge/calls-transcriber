@@ -145,8 +145,26 @@ func (t *Transcriber) processLiveTrack(track trackRemote, sessionID string) {
 		}()
 
 		if t.cfg.TranscribeAPI == config.TranscribeAPIParakeet {
-			t.liveCaptionsWg.Add(1)
-			go t.processLiveCaptionsNemotron(ctx, pktPayloadCh)
+			select {
+			case t.liveASRSlots <- struct{}{}:
+				t.liveCaptionsWg.Add(1)
+				go func() {
+					defer func() { <-t.liveASRSlots }()
+					t.processLiveCaptionsNemotron(ctx, pktPayloadCh)
+				}()
+			default:
+				slog.Warn("nemotron live caption stream limit reached, skipping track",
+					slog.String("trackID", ctx.trackID),
+					slog.Int("max_streams", t.cfg.LiveCaptionsNumTranscribers))
+				if err := t.client.SendWS(wsEvMetric, public.MetricMsg{
+					SessionID:  ctx.sessionID,
+					MetricName: public.MetricLiveCaptionsTranscriberBufFull,
+				}, false); err != nil {
+					slog.Error("processLiveTrack: error sending wsEvMetric MetricLiveCaptionsTranscriberBufFull",
+						slog.String("err", err.Error()),
+						slog.String("trackID", ctx.trackID))
+				}
+			}
 		} else {
 			go t.processLiveCaptionsForTrack(ctx, pktPayloadCh)
 		}
@@ -550,14 +568,10 @@ func (t *Transcriber) newTrackTranscriber() (transcribe.Transcriber, error) {
 			DataDir:      t.dataPath,
 		})
 	case config.TranscribeAPIParakeet:
-		lang := t.cfg.ASRLanguage
-		if lang == "" {
-			lang = t.cfg.LiveCaptionsLanguage
-		}
-		slog.Debug("post-call parakeet language", slog.String("language", lang))
+		slog.Debug("post-call parakeet language", slog.String("language", t.cfg.ASRLanguage))
 		return nemospeech.NewRecognizer(nemospeech.RecognizerConfig{
 			ModelFile: filepath.Join(getModelsDir(), nemospeech.DefaultParakeetModel),
-			Language:  lang,
+			Language:  t.cfg.ASRLanguage,
 		})
 	default:
 		return nil, fmt.Errorf("transcribe API %q not implemented", t.cfg.TranscribeAPI)
