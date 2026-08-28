@@ -16,7 +16,7 @@ make docker-build-parakeet
 
 Tags locaux : `calls-transcriber:master` (attendu par l’offloader en `DEV_MODE`) et `calls-transcriber:parakeet`.
 
-NeMo-Speech.cpp n’est **pas** compilé : on prend l’archive CPU officielle [v0.1.0](https://github.com/NVIDIA/NeMo-Speech.cpp/releases/tag/v0.1.0) (`include/` + `libnemo_speech_asr_c.so`, ~4 Mo). Whisper.cpp se compile dans l’image (cache BuildKit `/cache/deps` + ccache : pas de re-wget/re-cmake si les artefacts sont là). Les deux GGUF (~1,45 Go) sont téléchargés **une fois** dans `.cache/parakeet-models` (gitignored) puis copiés ; les rebuilds suivants réutilisent ce cache.
+NeMo-Speech.cpp n’est **pas** compilé : on prend l’archive CPU officielle [v0.1.0](https://github.com/NVIDIA/NeMo-Speech.cpp/releases/tag/v0.1.0) (`include/` + `libnemo_speech_asr_c.so`, ~4 Mo). Whisper.cpp se compile dans l’image (cache BuildKit `/cache/deps` + ccache : pas de re-wget/re-cmake si les artefacts sont là). Les deux GGUF (~1,45 Go) sont téléchargés **une fois** dans `.cache/parakeet-models` (gitignored) puis montés via `--build-context parakeet-models` (`PARAKEET_MODELS_MODE=host`, défaut Makefile) ; les rebuilds suivants réutilisent ce cache. CI/upstream : `PARAKEET_MODELS_MODE=download` + cache BuildKit `parakeet-gguf`.
 
 Après un rebuild, pas besoin de relancer Mattermost ni l’offloader. `DEV_MODE` prend `calls-transcriber:master` au **prochain** job d’enregistrement.
 

@@ -239,12 +239,17 @@ endif
 parakeet-models: ## download Parakeet/Nemotron GGUF into .cache (skipped if already present)
 	./build/download_parakeet_models.sh .cache/parakeet-models
 
+# host = reuse .cache/parakeet-models (local dev); download = wget + BuildKit cache (CI/upstream)
+PARAKEET_MODELS_MODE ?= host
+
 .PHONY: docker-build-parakeet
 docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcriber image (CPU GGUF)
 	@$(INFO) Building Parakeet transcriber image calls-transcriber:master
 	$(AT)$(DOCKER) buildx build \
 	--platform linux/${ARCH} \
 	--output=type=docker \
+	--target runner-nemo \
+	--build-context parakeet-models=.cache/parakeet-models \
 	--build-arg GO_VERSION=${GO_VERSION} \
 	--build-arg OPUS_VERSION=${OPUS_VERSION} \
 	--build-arg OPUS_SHA=${OPUS_SHA} \
@@ -254,13 +259,19 @@ docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcr
 	--build-arg ONNX_VERSION=${ONNX_VERSION} \
 	--build-arg AZURE_SDK_VERSION=${AZURE_SDK_VERSION} \
 	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
+	--build-arg NEMOSPEECH=1 \
 	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
 	--build-arg NEMO_SPEECH_SHA_AMD64=${NEMO_SPEECH_SHA_AMD64} \
 	--build-arg NEMO_SPEECH_SHA_ARM64=${NEMO_SPEECH_SHA_ARM64} \
-	-f ./build/Dockerfile.parakeet . \
+	--build-arg PARAKEET_MODELS_MODE=${PARAKEET_MODELS_MODE} \
+	-f ${DOCKER_FILE} . \
 	-t calls-transcriber:master \
 	-t calls-transcriber:parakeet || ${FAIL}
 	@$(OK) Built calls-transcriber:master and calls-transcriber:parakeet
+
+.PHONY: ci-nemospeech
+ci-nemospeech: ## compile-check nemospeech cgo (CI)
+	/bin/bash ./build/ci_nemospeech.sh
 
 .PHONY: docker-sign
 docker-sign: ## to sign the docker image

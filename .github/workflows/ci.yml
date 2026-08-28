@@ -35,6 +35,52 @@ jobs:
         go mod verify
         make test
 
+  test-nemospeech:
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Compile-check nemospeech
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget ca-certificates
+        make ci-nemospeech
+
+  test-nemospeech-arm64:
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Compile-check nemospeech
+      env:
+        ARCH: arm64
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget ca-certificates
+        make ci-nemospeech
+
   test-arm64:
     defaults:
       run:

@@ -6,7 +6,11 @@ A headless speech transcriber for [Mattermost Calls](https://github.com/mattermo
 
 This program is **not** meant to be run directly (nor manually) other than for development/testing purposes. In fact, this is automatically used by the [`calls-offloader`](https://github.com/mattermost/calls-offloader) service to run transcribing jobs. Please refer to that project if you are looking to enable call transcriptions in your Mattermost instance.
 
-Parakeet TDT + Nemotron live captions (CPU GGUF): see [docs/parakeet.md](docs/parakeet.md).
+### Parakeet / Nemotron (optional)
+
+Build the `runner-nemo` image target with `NEMOSPEECH=1` (NeMo-Speech.cpp CPU SDK + GGUF weights in `/models`). Model licenses: `build/licenses/NOTICE`.
+
+Local dev: `make parakeet-models` caches GGUF under `.cache/` (gitignored); `make docker-build-parakeet` mounts that cache so rebuilds do not re-download ~1.5 GB.
 
 ## Manual execution (testing only)
 

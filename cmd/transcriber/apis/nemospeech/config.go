@@ -3,6 +3,7 @@ package nemospeech
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -36,21 +37,17 @@ func (c RecognizerConfig) IsValid() error {
 	return nil
 }
 
-func ModelPath(modelsDir, filename string) string {
-	if modelsDir == "" {
-		modelsDir = "/models"
-	}
-	return modelsDir + "/" + filename
-}
-
 // ValidateModels checks GGUF weights exist before a job starts.
 func ValidateModels(modelsDir string, liveCaptions bool) error {
 	if !Available {
 		return fmt.Errorf("parakeet/nemotron support was not compiled in (build with -tags nemospeech)")
 	}
-	paths := []string{ModelPath(modelsDir, DefaultParakeetModel)}
+	if modelsDir == "" {
+		modelsDir = "/models"
+	}
+	paths := []string{filepath.Join(modelsDir, DefaultParakeetModel)}
 	if liveCaptions {
-		paths = append(paths, ModelPath(modelsDir, DefaultNemotronModel))
+		paths = append(paths, filepath.Join(modelsDir, DefaultNemotronModel))
 	}
 	for _, path := range paths {
 		if _, err := os.Stat(path); err != nil {
