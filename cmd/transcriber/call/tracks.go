@@ -294,12 +294,26 @@ func (t *Transcriber) handleClose() error {
 	slog.Debug("live tracks processing done, starting post processing")
 	start := time.Now()
 
+	var sharedTranscriber transcribe.Transcriber
+	if t.cfg.TranscribeAPI == config.TranscribeAPIParakeet {
+		rec, err := t.newTrackTranscriber()
+		if err != nil {
+			return fmt.Errorf("failed to create post-call transcriber: %w", err)
+		}
+		sharedTranscriber = rec
+		defer func() {
+			if err := sharedTranscriber.Destroy(); err != nil {
+				slog.Error("failed to destroy post-call transcriber", slog.String("err", err.Error()))
+			}
+		}()
+	}
+
 	var samplesDur time.Duration
 	var tr transcribe.Transcription
 	for ctx := range t.trackCtxs {
 		slog.Debug("post processing track", slog.String("trackID", ctx.trackID))
 
-		trackTr, dur, err := t.transcribeTrack(ctx)
+		trackTr, dur, err := t.transcribeTrack(ctx, sharedTranscriber)
 		if err != nil {
 			slog.Error("failed to transcribe track", slog.String("trackID", ctx.trackID), slog.String("err", err.Error()))
 			return fmt.Errorf("failed to transcribe track: %w", err)
@@ -417,8 +431,9 @@ func (ctx trackContext) decodeAudio() ([]trackTimedSamples, error) {
 }
 
 // transcribeTrack feeds track's raw audio samples to a transcription engine (e.g. whisper)
-// and outputs a transcription.
-func (t *Transcriber) transcribeTrack(ctx trackContext) (transcribe.TrackTranscription, time.Duration, error) {
+// and outputs a transcription. When shared is non-nil (parakeet post-call), it is reused
+// across tracks and not destroyed here.
+func (t *Transcriber) transcribeTrack(ctx trackContext, shared transcribe.Transcriber) (transcribe.TrackTranscription, time.Duration, error) {
 	trackTr := transcribe.TrackTranscription{
 		Speaker: ctx.user.GetDisplayName(model.ShowFullName),
 	}
@@ -430,9 +445,15 @@ func (t *Transcriber) transcribeTrack(ctx trackContext) (transcribe.TrackTranscr
 
 	slog.Debug("decoding done", slog.Any("samplesLen", len(samples)))
 
-	transcriber, err := t.newTrackTranscriber()
-	if err != nil {
-		return trackTr, 0, fmt.Errorf("failed to create track transcriber: %w", err)
+	transcriber := shared
+	ownTranscriber := false
+	if transcriber == nil {
+		var err error
+		transcriber, err = t.newTrackTranscriber()
+		if err != nil {
+			return trackTr, 0, fmt.Errorf("failed to create track transcriber: %w", err)
+		}
+		ownTranscriber = true
 	}
 
 	sd, err := speech.NewDetector(speech.DetectorConfig{
@@ -544,8 +565,10 @@ func (t *Transcriber) transcribeTrack(ctx trackContext) (transcribe.TrackTranscr
 		}
 	}
 
-	if err := transcriber.Destroy(); err != nil {
-		return trackTr, 0, fmt.Errorf("failed to destroy track transcriber: %w", err)
+	if ownTranscriber {
+		if err := transcriber.Destroy(); err != nil {
+			return trackTr, 0, fmt.Errorf("failed to destroy track transcriber: %w", err)
+		}
 	}
 
 	return trackTr, totalDur, nil

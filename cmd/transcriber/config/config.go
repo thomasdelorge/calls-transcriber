@@ -86,6 +86,8 @@ type CallTranscriberConfig struct {
 	LiveCaptionsNumTranscribers          int
 	LiveCaptionsNumThreadsPerTranscriber int
 	LiveCaptionsLanguage                 string
+	// LiveCaptionsNumTranscribers also caps concurrent Nemotron streams (parakeet live
+	// captions); extra tracks skip captions rather than overloading the shared recognizer.
 	// LiveCaptionsRNNTRightContext is Nemotron cache-aware right context in 80ms frames.
 	// 1=160ms, 3=320ms, 6=560ms. Unused for Whisper.
 	LiveCaptionsRNNTRightContext int
