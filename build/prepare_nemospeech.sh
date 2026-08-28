@@ -31,11 +31,9 @@ mkdir -p "$PREFIX"
 tar xf "$ARCHIVE"
 mv "nemo-speech-${NEMO_SPEECH_VERSION}-linux-${ARCH}-cpu"/* "$PREFIX/"
 rmdir "nemo-speech-${NEMO_SPEECH_VERSION}-linux-${ARCH}-cpu"
-# Archive ships libstdc++/libgcc/libgomp. LD_LIBRARY_PATH must stay on PREFIX/lib
-# so NeMo libggml wins over Whisper's copy (same SONAME). Those runtimes would
-# shadow Debian's and break libwhisper (GLIBCXX_3.4.29).
-find "$PREFIX/lib" -maxdepth 1 \( \
-	-name 'libstdc++.so*' -o -name 'libgcc_s.so*' -o -name 'libgomp.so*' \
-\) -delete
+# Archive ships libstdc++/libgcc/libgomp. Keep them: NeMo loads them via $ORIGIN rpath
+# (fix_parakeet_libs.sh). Whisper keeps using the base image runtimes.
+test -e "$PREFIX/lib/libstdc++.so.6"
+test -e "$PREFIX/lib/libgcc_s.so.1"
 test -f "$PREFIX/include/nemo_speech/asr.h"
 test -f "$PREFIX/lib/libnemo_speech_asr_c.so"

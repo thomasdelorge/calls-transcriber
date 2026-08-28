@@ -71,7 +71,7 @@ ARG ONNX_VERSION
 ARG AZURE_SDK_VERSION
 # hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y patchelf && \
+    apt-get install --no-install-recommends -y patchelf binutils && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/dist/calls-transcriber-${TARGETOS}-${TARGETARCH} /opt/calls-transcriber/bin/calls-transcriber
