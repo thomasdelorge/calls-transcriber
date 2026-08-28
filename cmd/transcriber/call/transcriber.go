@@ -52,6 +52,7 @@ type Transcriber struct {
 	liveASR             *nemospeech.Recognizer
 	liveCaptionsWg      sync.WaitGroup // parakeet live-caption goroutines (one per track)
 	liveASRWg           sync.WaitGroup // active NeMo streams (must finish before Destroy)
+	liveASRSlots        chan struct{}  // caps concurrent Nemotron streams (LiveCaptionsNumTranscribers)
 }
 
 func NewTranscriber(cfg config.CallTranscriberConfig, dataPath string) (t *Transcriber, retErr error) {
@@ -84,6 +85,12 @@ func NewTranscriber(cfg config.CallTranscriberConfig, dataPath string) (t *Trans
 
 	if err := cfg.IsValid(); err != nil {
 		return t, err
+	}
+
+	if cfg.TranscribeAPI == config.TranscribeAPIParakeet {
+		if err := nemospeech.ValidateModels(getModelsDir(), cfg.LiveCaptionsOn); err != nil {
+			return t, fmt.Errorf("parakeet models: %w", err)
+		}
 	}
 
 	rtcdClient, err := client.New(client.Config{

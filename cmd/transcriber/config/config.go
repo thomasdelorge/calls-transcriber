@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattermost/calls-transcriber/cmd/transcriber/apis/nemospeech"
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/transcribe"
 )
 
@@ -29,7 +30,8 @@ const (
 	LiveCaptionsNumTranscribersDefault          = 1
 	LiveCaptionsNumThreadsPerTranscriberDefault = 2
 	LiveCaptionsLanguageDefault                 = "en"
-	LiveCaptionsRNNTRightContextDefault         = 3 // 320ms chunks: (R+1)*80ms
+	LiveCaptionsRNNTRightContextDefault         = 3 // latency/precision tradeoff: 320 ms at 80 ms/frame
+	LiveCaptionsRNNTRightContextMax             = 6 // 560 ms; NeMo streaming_config upper practical bound
 )
 
 type OutputFormat string
@@ -160,6 +162,9 @@ func (cfg CallTranscriberConfig) IsValid() error {
 	if !cfg.TranscribeAPI.IsValid() {
 		return fmt.Errorf("TranscribeAPI value is not valid")
 	}
+	if cfg.TranscribeAPI == TranscribeAPIParakeet && !nemospeech.Available {
+		return fmt.Errorf("TranscribeAPI %q is not available in this build", cfg.TranscribeAPI)
+	}
 	if !cfg.ModelSize.IsValid() {
 		return fmt.Errorf("ModelSize value is not valid")
 	}
@@ -188,6 +193,14 @@ func (cfg CallTranscriberConfig) IsValid() error {
 
 		if cfg.LiveCaptionsLanguage == "" {
 			return fmt.Errorf("LiveCaptionsLanguage cannot be empty")
+		}
+
+		rctx := cfg.LiveCaptionsRNNTRightContext
+		if rctx == 0 {
+			rctx = LiveCaptionsRNNTRightContextDefault
+		}
+		if rctx < -1 || rctx > LiveCaptionsRNNTRightContextMax {
+			return fmt.Errorf("LiveCaptionsRNNTRightContext must be in [-1, %d]", LiveCaptionsRNNTRightContextMax)
 		}
 	}
 

@@ -42,3 +42,20 @@ func ModelPath(modelsDir, filename string) string {
 	}
 	return modelsDir + "/" + filename
 }
+
+// ValidateModels checks GGUF weights exist before a job starts.
+func ValidateModels(modelsDir string, liveCaptions bool) error {
+	if !Available {
+		return fmt.Errorf("parakeet/nemotron support was not compiled in (build with -tags nemospeech)")
+	}
+	paths := []string{ModelPath(modelsDir, DefaultParakeetModel)}
+	if liveCaptions {
+		paths = append(paths, ModelPath(modelsDir, DefaultNemotronModel))
+	}
+	for _, path := range paths {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("missing ASR model %q: %w", path, err)
+		}
+	}
+	return nil
+}

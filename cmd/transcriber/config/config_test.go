@@ -77,6 +77,50 @@ func TestConfigIsValid(t *testing.T) {
 			expectedError: "TranscribeAPI value is not valid",
 		},
 		{
+			name: "parakeet API not available in build",
+			cfg: CallTranscriberConfig{
+				SiteURL:         "http://localhost:8065",
+				CallID:          "8w8jorhr7j83uqr6y1st894hqe",
+				PostID:          "udzdsg7dwidbzcidx5khrf8nee",
+				AuthToken:       "qj75unbsef83ik9p7ueypb6iyw",
+				TranscriptionID: "on5yfih5etn5m8rfdidamc1oxa",
+				TranscribeAPI:   TranscribeAPIParakeet,
+				ModelSize:       ModelSizeMedium,
+				OutputFormat:    OutputFormatVTT,
+			},
+			expectedError: fmt.Sprintf("TranscribeAPI %q is not available in this build", TranscribeAPIParakeet),
+		},
+		{
+			name: "invalid LiveCaptionsRNNTRightContext for parakeet",
+			cfg: CallTranscriberConfig{
+				SiteURL:                      "http://localhost:8065",
+				CallID:                       "8w8jorhr7j83uqr6y1st894hqe",
+				PostID:                       "udzdsg7dwidbzcidx5khrf8nee",
+				AuthToken:                    "qj75unbsef83ik9p7ueypb6iyw",
+				TranscriptionID:              "on5yfih5etn5m8rfdidamc1oxa",
+				TranscribeAPI:                TranscribeAPIWhisperCPP,
+				ModelSize:                    ModelSizeMedium,
+				OutputFormat:                 OutputFormatVTT,
+				NumThreads:                           1,
+				LiveCaptionsOn:                       true,
+				LiveCaptionsModelSize:                LiveCaptionsModelSizeDefault,
+				LiveCaptionsLanguage:                 "en",
+				LiveCaptionsNumTranscribers:          1,
+				LiveCaptionsNumThreadsPerTranscriber: 1,
+				LiveCaptionsRNNTRightContext:         99,
+				OutputOptions: OutputOptions{
+					Text: transcribe.TextOptions{
+						CompactOptions: transcribe.TextCompactOptions{
+							SilenceThresholdMs:   2000,
+							MaxSegmentDurationMs: 10000,
+						},
+					},
+				},
+			},
+			inTranscriber: "true",
+			expectedError: fmt.Sprintf("LiveCaptionsRNNTRightContext must be in [-1, %d]", LiveCaptionsRNNTRightContextMax),
+		},
+		{
 			name: "invalid ModelSize",
 			cfg: CallTranscriberConfig{
 				SiteURL:         "http://localhost:8065",
