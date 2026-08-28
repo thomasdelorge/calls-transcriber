@@ -1,12 +1,13 @@
 #!/bin/bash
-set -ex
+set -euxo pipefail
 
 # Official CPU SDK archives: headers + libnemo_speech_asr_c (no local compile).
-# Pin: NEMO_SPEECH_VERSION. Bump that (Makefile / Docker ARG) to upgrade.
+# Pin: NEMO_SPEECH_VERSION + SHA (Makefile / Docker build-arg). Bump both to upgrade.
 # https://github.com/NVIDIA/NeMo-Speech.cpp/releases
 NEMO_SPEECH_VERSION=${1:-0.1.0}
 PREFIX=${2:-/opt/nemo-speech}
 TARGET_ARCH=${3:-amd64}
+NEMO_SPEECH_SHA=${4:?NEMO_SPEECH_SHA is required}
 
 case "$TARGET_ARCH" in
 	amd64|x86_64)
@@ -24,8 +25,19 @@ esac
 ARCHIVE="nemo-speech-${NEMO_SPEECH_VERSION}-linux-${ARCH}-cpu.tar.gz"
 URL="https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v${NEMO_SPEECH_VERSION}/${ARCHIVE}"
 
+fetch() {
+	local url=$1 file=$2 sha=$3
+	if [ -f "$file" ] && echo "$sha  $file" | sha256sum --check --status; then
+		echo "using cached $file"
+		return
+	fi
+	rm -f "$file"
+	wget -O "$file" --tries=3 --timeout=60 "$url"
+	echo "$sha  $file" | sha256sum --check
+}
+
 cd /tmp
-wget -O "$ARCHIVE" "$URL"
+fetch "$URL" "$ARCHIVE" "$NEMO_SPEECH_SHA"
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX"
 tar xf "$ARCHIVE"

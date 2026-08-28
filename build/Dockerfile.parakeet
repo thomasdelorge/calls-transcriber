@@ -35,6 +35,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG AZURE_SDK_VERSION
 ARG AZURE_SDK_SHA
 ARG NEMO_SPEECH_VERSION=0.1.0
+ARG NEMO_SPEECH_SHA_AMD64=0f74131d631ad2c694cf0ec53490866bb6461147959589a69fb6fc231944065b
+ARG NEMO_SPEECH_SHA_ARM64=0e4112255d566de7bdd142f239e984995c4447103ba8feb41f2bb5c559d561d3
 
 # GGUFs from host .cache (make parakeet-models). Independent layer: code changes do not re-download.
 COPY .cache/parakeet-models /tmp/parakeet-models
@@ -55,7 +57,13 @@ RUN --mount=type=cache,id=parakeet-prepare-deps-${TARGETARCH},target=/cache/deps
     cp -a /cache/deps/SpeechSDK-Linux-${AZURE_SDK_VERSION} /tmp/
 
 COPY ./build /src/build
-RUN /bin/bash ./build/prepare_nemospeech.sh ${NEMO_SPEECH_VERSION} /opt/nemo-speech ${TARGETARCH}
+ARG NEMO_SPEECH_SHA_AMD64
+ARG NEMO_SPEECH_SHA_ARM64
+RUN case "${TARGETARCH}" in \
+		arm64|aarch64) NEMO_SHA="${NEMO_SPEECH_SHA_ARM64}" ;; \
+		*) NEMO_SHA="${NEMO_SPEECH_SHA_AMD64}" ;; \
+	esac && \
+	/bin/bash ./build/prepare_nemospeech.sh ${NEMO_SPEECH_VERSION} /opt/nemo-speech ${TARGETARCH} "${NEMO_SHA}"
 
 COPY . /src
 ENV NEMOSPEECH=1

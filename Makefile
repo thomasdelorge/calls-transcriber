@@ -53,6 +53,8 @@ AZURE_SDK_SHA ?= "26bbab32e16128c02af3b0f12640b15d13d969ec6dc748153004e380ff4c69
 # Uses the official CPU SDK archive, not a source build.
 NEMOSPEECH ?=
 NEMO_SPEECH_VERSION ?= "0.1.0"
+NEMO_SPEECH_SHA_AMD64 ?= "0f74131d631ad2c694cf0ec53490866bb6461147959589a69fb6fc231944065b"
+NEMO_SPEECH_SHA_ARM64 ?= "0e4112255d566de7bdd142f239e984995c4447103ba8feb41f2bb5c559d561d3"
 
 ifeq ($(NEMOSPEECH),1)
 GO_BUILD_OPTS += -tags nemospeech
@@ -253,6 +255,8 @@ docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcr
 	--build-arg AZURE_SDK_VERSION=${AZURE_SDK_VERSION} \
 	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
 	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
+	--build-arg NEMO_SPEECH_SHA_AMD64=${NEMO_SPEECH_SHA_AMD64} \
+	--build-arg NEMO_SPEECH_SHA_ARM64=${NEMO_SPEECH_SHA_ARM64} \
 	-f ./build/Dockerfile.parakeet . \
 	-t calls-transcriber:master \
 	-t calls-transcriber:parakeet || ${FAIL}
