@@ -41,7 +41,7 @@ ARG AZURE_SDK_SHA
 # We first copy just the build directory so that we can properly cache dependencies which can take a while to download.
 COPY ./build /src/build
 WORKDIR /src
-RUN /bin/bash ./build/prepare_deps.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA} "true"
+RUN /bin/bash ./build/prepare_deps.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA}
 
 COPY . /src
 RUN /bin/bash ./build/build.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA}
