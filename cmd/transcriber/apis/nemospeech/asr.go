@@ -25,7 +25,8 @@ type Recognizer struct {
 }
 
 type Stream struct {
-	s *C.nemo_speech_asr_stream
+	s        *C.nemo_speech_asr_stream
+	langCStr *C.char
 }
 
 func lastError() string {
@@ -62,7 +63,7 @@ func NewRecognizer(cfg RecognizerConfig) (*Recognizer, error) {
 	if cfg.Streaming {
 		streaming.size = C.size_t(unsafe.Sizeof(streaming))
 		rctx := cfg.RNNTRightContext
-		if rctx <= 0 {
+		if rctx == 0 {
 			rctx = DefaultRNNTRightCtx
 		}
 		streaming.rnnt_right_context = C.int32_t(rctx)
@@ -171,18 +172,20 @@ func (r *Recognizer) StartStream(language string) (*Stream, error) {
 	opts := C.nemo_speech_asr_recognition_options_default()
 	opts.interim_results = C.bool(true)
 	lang := ResolveLanguageCode(language)
-	var cLang *C.char
+	var langCStr *C.char
 	if lang != "" {
-		cLang = C.CString(lang)
-		defer C.free(unsafe.Pointer(cLang))
-		opts.language_code = cLang
+		langCStr = C.CString(lang)
+		opts.language_code = langCStr
 	}
 
 	var stream *C.nemo_speech_asr_stream
 	if st := C.nemo_speech_asr_streaming_recognize(r.rec, &opts, &stream); st != C.NEMO_SPEECH_ASR_OK || stream == nil {
+		if langCStr != nil {
+			C.free(unsafe.Pointer(langCStr))
+		}
 		return nil, fmt.Errorf("nemo_speech_asr_streaming_recognize failed: %s", lastError())
 	}
-	return &Stream{s: stream}, nil
+	return &Stream{s: stream, langCStr: langCStr}, nil
 }
 
 func (s *Stream) Push(samples []float32, sampleRate int32) error {
@@ -249,11 +252,17 @@ func (s *Stream) Finish() error {
 }
 
 func (s *Stream) Close() {
-	if s == nil || s.s == nil {
+	if s == nil {
 		return
 	}
-	C.nemo_speech_asr_stream_close(s.s)
-	s.s = nil
+	if s.s != nil {
+		C.nemo_speech_asr_stream_close(s.s)
+		s.s = nil
+	}
+	if s.langCStr != nil {
+		C.free(unsafe.Pointer(s.langCStr))
+		s.langCStr = nil
+	}
 }
 
 func resultToSegments(result *C.nemo_speech_asr_result) ([]transcribe.Segment, string, error) {
@@ -268,14 +277,24 @@ func resultToSegments(result *C.nemo_speech_asr_result) ([]transcribe.Segment, s
 	}
 
 	nWords := int(C.nemo_speech_asr_result_word_count(result, 0))
-	seg := transcribe.Segment{Text: text}
 	if nWords > 0 {
-		// Word times are milliseconds (Riva-compatible ABI).
-		seg.StartTS = int64(C.nemo_speech_asr_result_word_start_time(result, 0, 0))
-		seg.EndTS = int64(C.nemo_speech_asr_result_word_end_time(result, 0, C.size_t(nWords-1)))
+		words := make([]TimedWord, nWords)
+		for i := 0; i < nWords; i++ {
+			words[i] = TimedWord{
+				Text:    C.GoString(C.nemo_speech_asr_result_word_text(result, 0, C.size_t(i))),
+				StartMS: int64(C.nemo_speech_asr_result_word_start_time(result, 0, C.size_t(i))),
+				EndMS:   int64(C.nemo_speech_asr_result_word_end_time(result, 0, C.size_t(i))),
+			}
+		}
+		segments := GroupWordsIntoSegments(words, DefaultMaxSegmentDurMS)
+		if len(segments) == 0 {
+			return nil, lang, nil
+		}
+		return segments, lang, nil
 	}
 
-	if text == "" && nWords == 0 {
+	seg := transcribe.Segment{Text: text}
+	if text == "" {
 		return nil, lang, nil
 	}
 	return []transcribe.Segment{seg}, lang, nil
