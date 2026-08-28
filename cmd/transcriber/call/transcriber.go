@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mattermost/calls-transcriber/cmd/transcriber/apis/nemospeech"
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/config"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -48,6 +49,7 @@ type Transcriber struct {
 	captionsPoolQueueCh chan captionPackage
 	captionsPoolWg      sync.WaitGroup
 	captionsPoolDoneCh  chan struct{}
+	liveASR             *nemospeech.Recognizer
 }
 
 func NewTranscriber(cfg config.CallTranscriberConfig, dataPath string) (t *Transcriber, retErr error) {
@@ -103,6 +105,18 @@ func NewTranscriber(cfg config.CallTranscriberConfig, dataPath string) (t *Trans
 }
 
 func (t *Transcriber) Start(ctx context.Context) error {
+	if t.cfg.LiveCaptionsOn && t.cfg.TranscribeAPI == config.TranscribeAPIParakeet {
+		slog.Debug("LiveCaptionsOn is true",
+			slog.String("TranscribeAPI", string(t.cfg.TranscribeAPI)),
+			slog.String("LiveCaptionsModelSize", string(t.cfg.LiveCaptionsModelSize)),
+			slog.Int("LiveCaptionsNumTranscribers", t.cfg.LiveCaptionsNumTranscribers),
+			slog.Int("LiveCaptionsNumThreadsPerTranscriber", t.cfg.LiveCaptionsNumThreadsPerTranscriber),
+			slog.String("LiveCaptionsLanguage", t.cfg.LiveCaptionsLanguage))
+		if err := t.initNemotronLiveCaptions(); err != nil {
+			return fmt.Errorf("failed to init nemotron live captions: %w", err)
+		}
+	}
+
 	var connectOnce sync.Once
 	connectedCh := make(chan struct{})
 	err := t.client.On(client.RTCConnectEvent, func(_ any) error {
@@ -181,12 +195,7 @@ func (t *Transcriber) Start(ctx context.Context) error {
 		return ctx.Err()
 	}
 
-	if t.cfg.LiveCaptionsOn {
-		slog.Debug("LiveCaptionsOn is true; startingTranscriberPool starting transcriber pool.",
-			slog.String("LiveCaptionsModelSize", string(t.cfg.LiveCaptionsModelSize)),
-			slog.Int("LiveCaptionsNumTranscribers", t.cfg.LiveCaptionsNumTranscribers),
-			slog.Int("LiveCaptionsNumThreadsPerTranscriber", t.cfg.LiveCaptionsNumThreadsPerTranscriber),
-			slog.String("LiveCaptionsLanguage", t.cfg.LiveCaptionsLanguage))
+	if t.cfg.LiveCaptionsOn && t.cfg.TranscribeAPI != config.TranscribeAPIParakeet {
 		go t.startTranscriberPool()
 	}
 

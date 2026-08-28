@@ -6,6 +6,8 @@ A headless speech transcriber for [Mattermost Calls](https://github.com/mattermo
 
 This program is **not** meant to be run directly (nor manually) other than for development/testing purposes. In fact, this is automatically used by the [`calls-offloader`](https://github.com/mattermost/calls-offloader) service to run transcribing jobs. Please refer to that project if you are looking to enable call transcriptions in your Mattermost instance.
 
+Parakeet TDT + Nemotron live captions (CPU GGUF): see [docs/parakeet.md](docs/parakeet.md).
+
 ## Manual execution (testing only)
 
 ### Fetch the latest image

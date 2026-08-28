@@ -13,6 +13,7 @@ import (
 	"github.com/mattermost/mattermost-plugin-calls/server/public"
 
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/apis/azure"
+	"github.com/mattermost/calls-transcriber/cmd/transcriber/apis/nemospeech"
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/apis/whisper.cpp"
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/config"
 	"github.com/mattermost/calls-transcriber/cmd/transcriber/ogg"
@@ -143,7 +144,11 @@ func (t *Transcriber) processLiveTrack(track trackRemote, sessionID string) {
 			close(pktPayloadCh)
 		}()
 
-		go t.processLiveCaptionsForTrack(ctx, pktPayloadCh)
+		if t.cfg.TranscribeAPI == config.TranscribeAPIParakeet {
+			go t.processLiveCaptionsNemotron(ctx, pktPayloadCh)
+		} else {
+			go t.processLiveCaptionsForTrack(ctx, pktPayloadCh)
+		}
 	}
 
 	// Read track audio:
@@ -260,6 +265,10 @@ func (t *Transcriber) handleClose() error {
 	close(t.trackCtxs)
 
 	t.captionsPoolWg.Wait()
+	if t.liveASR != nil {
+		_ = t.liveASR.Destroy()
+		t.liveASR = nil
+	}
 
 	slog.Debug("live tracks processing done, starting post processing")
 	start := time.Now()
@@ -536,6 +545,16 @@ func (t *Transcriber) newTrackTranscriber() (transcribe.Transcriber, error) {
 			SpeechKey:    speechKey,
 			SpeechRegion: speechRegion,
 			DataDir:      t.dataPath,
+		})
+	case config.TranscribeAPIParakeet:
+		lang := t.cfg.ASRLanguage
+		if lang == "" {
+			lang = t.cfg.LiveCaptionsLanguage
+		}
+		slog.Debug("post-call parakeet language", slog.String("language", lang))
+		return nemospeech.NewRecognizer(nemospeech.RecognizerConfig{
+			ModelFile: filepath.Join(getModelsDir(), nemospeech.DefaultParakeetModel),
+			Language:  lang,
 		})
 	default:
 		return nil, fmt.Errorf("transcribe API %q not implemented", t.cfg.TranscribeAPI)

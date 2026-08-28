@@ -49,6 +49,14 @@ ONNX_VERSION ?= "1.18.1"
 # Azure Speech SDK
 AZURE_SDK_VERSION ?= "1.38.0"
 AZURE_SDK_SHA ?= "26bbab32e16128c02af3b0f12640b15d13d969ec6dc748153004e380ff4c69d0"
+# NeMo-Speech.cpp (Parakeet / Nemotron). Empty = not compiled in.
+# Uses the official CPU SDK archive, not a source build.
+NEMOSPEECH ?=
+NEMO_SPEECH_VERSION ?= "0.1.0"
+
+ifeq ($(NEMOSPEECH),1)
+GO_BUILD_OPTS += -tags nemospeech
+endif
 
 ## Docker Variables
 # Docker executable
@@ -224,6 +232,31 @@ ifeq ($(shell git tag -l --sort=v:refname | tail -n1),$(APP_VERSION))
 endif
 endif
 endif
+
+.PHONY: parakeet-models
+parakeet-models: ## download Parakeet/Nemotron GGUF into .cache (skipped if already present)
+	./build/download_parakeet_models.sh .cache/parakeet-models
+
+.PHONY: docker-build-parakeet
+docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcriber image (CPU GGUF)
+	@$(INFO) Building Parakeet transcriber image calls-transcriber:master
+	$(AT)$(DOCKER) buildx build \
+	--platform linux/${ARCH} \
+	--output=type=docker \
+	--build-arg GO_VERSION=${GO_VERSION} \
+	--build-arg OPUS_VERSION=${OPUS_VERSION} \
+	--build-arg OPUS_SHA=${OPUS_SHA} \
+	--build-arg WHISPER_VERSION=${WHISPER_VERSION} \
+	--build-arg WHISPER_SHA=${WHISPER_SHA} \
+	--build-arg WHISPER_MODELS=${WHISPER_MODELS} \
+	--build-arg ONNX_VERSION=${ONNX_VERSION} \
+	--build-arg AZURE_SDK_VERSION=${AZURE_SDK_VERSION} \
+	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
+	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
+	-f ./build/Dockerfile.parakeet . \
+	-t calls-transcriber:master \
+	-t calls-transcriber:parakeet || ${FAIL}
+	@$(OK) Built calls-transcriber:master and calls-transcriber:parakeet
 
 .PHONY: docker-sign
 docker-sign: ## to sign the docker image

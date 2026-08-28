@@ -1,0 +1,22 @@
+services:
+  offloader:
+    build:
+      context: ../../../calls-offloader
+      dockerfile: build/Dockerfile
+      args:
+        GO_VERSION: "1.23.6"
+    image: calls-offloader:parakeet-test
+    user: "0:0"
+    ports:
+      - "4545:4545"
+    environment:
+      API_SECURITY_ALLOWSELFREGISTRATION: "true"
+      DEV_MODE: "true"
+      DOCKER_NETWORK: "host"
+      LOGGER_ENABLE_CONSOLE: "true"
+      LOGGER_CONSOLE_LEVEL: "DEBUG"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

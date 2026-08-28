@@ -1,0 +1,89 @@
+# Calls transcriber with Parakeet TDT (post-call) and Nemotron 3.5 (live captions).
+# CPU GGUF via NeMo-Speech.cpp. Whisper remains available in the same image.
+ARG GO_VERSION
+FROM --platform=$TARGETPLATFORM debian:bookworm-20240612-slim AS base
+
+WORKDIR /workdir
+
+# hadolint ignore=DL3008
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y ca-certificates libgomp1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r calls && useradd -mr -g calls calls
+
+ARG GO_VERSION
+FROM --platform=$TARGETPLATFORM golang:${GO_VERSION}-bookworm AS builder
+
+# hadolint ignore=DL3008
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y patch ccache wget ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG GO_BUILD_PLATFORMS=${TARGETOS}-${TARGETARCH}
+ARG OPUS_VERSION
+ARG OPUS_SHA
+ARG WHISPER_VERSION
+ARG WHISPER_SHA
+ARG WHISPER_MODELS
+ARG ONNX_VERSION
+ARG DEBIAN_FRONTEND=noninteractive
+ARG AZURE_SDK_VERSION
+ARG AZURE_SDK_SHA
+ARG NEMO_SPEECH_VERSION=0.1.0
+
+# GGUFs from host .cache (make parakeet-models). Independent layer: code changes do not re-download.
+COPY .cache/parakeet-models /tmp/parakeet-models
+RUN test -f /tmp/parakeet-models/parakeet-tdt-0.6b-v3.q8_0.gguf && \
+    test -f /tmp/parakeet-models/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf
+
+# Only this file feeds the Whisper/Opus compile layer (not the rest of build/).
+COPY ./build/prepare_deps.sh /src/build/prepare_deps.sh
+WORKDIR /src
+# BuildKit cache survives Dockerfile edits; skip wget/cmake when artifacts are present.
+RUN --mount=type=cache,id=parakeet-prepare-deps-${TARGETARCH},target=/cache/deps \
+    --mount=type=cache,id=parakeet-ccache-${TARGETARCH},target=/root/.ccache \
+    DEPS_DIR=/cache/deps \
+    /bin/bash ./build/prepare_deps.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA} "true" && \
+    cp -a /cache/deps/opus-${OPUS_VERSION} /tmp/ && \
+    cp -a /cache/deps/whisper.cpp-${WHISPER_VERSION} /tmp/ && \
+    cp -a /cache/deps/onnxruntime-linux-${ONNX_VERSION} /tmp/ && \
+    cp -a /cache/deps/SpeechSDK-Linux-${AZURE_SDK_VERSION} /tmp/
+
+COPY ./build /src/build
+RUN /bin/bash ./build/prepare_nemospeech.sh ${NEMO_SPEECH_VERSION} /opt/nemo-speech ${TARGETARCH}
+
+COPY . /src
+ENV NEMOSPEECH=1
+ENV C_INCLUDE_PATH="/opt/nemo-speech/include:${C_INCLUDE_PATH}"
+ENV LIBRARY_PATH="/opt/nemo-speech/lib:${LIBRARY_PATH}"
+RUN /bin/bash ./build/build.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA}
+
+FROM base AS runner
+ARG TARGETOS
+ARG TARGETARCH
+ARG WHISPER_VERSION
+ARG ONNX_VERSION
+ARG AZURE_SDK_VERSION
+COPY --from=builder /src/dist/calls-transcriber-${TARGETOS}-${TARGETARCH} /opt/calls-transcriber/bin/calls-transcriber
+COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/models /models
+COPY --from=builder /tmp/parakeet-models/ /models/
+COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/build/src/libwhisper* /usr/lib/
+COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/build/ggml/src/libggml* /usr/lib/
+COPY --from=builder /opt/nemo-speech /opt/nemo-speech
+COPY --from=builder /tmp/onnxruntime-linux-${ONNX_VERSION}/lib/* /usr/lib/
+COPY --from=builder /tmp/SpeechSDK-Linux-${AZURE_SDK_VERSION}/lib/${TARGETARCH}/* /usr/lib/
+COPY --from=builder /src/build/models/silero_vad.onnx /models
+COPY --from=builder /src/build/licenses /opt/calls-transcriber/licenses
+COPY --from=builder /src/build/entrypoint.sh .
+# Prefer NeMo ggml over Whisper's copy in /usr/lib (same SONAME libggml.so.0).
+# prepare_nemospeech.sh strips bundled libstdc++ so Whisper can use Debian's.
+ENV LD_LIBRARY_PATH=/opt/nemo-speech/lib
+RUN ldconfig
+
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["/opt/calls-transcriber/bin/calls-transcriber"]

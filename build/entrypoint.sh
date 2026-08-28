@@ -15,4 +15,4 @@ mkdir -p /data/$TRANSCRIPTION_ID
 chown -R calls:calls /data/$TRANSCRIPTION_ID
 
 # Run job as unprivileged user.
-exec runuser -u calls "$@"
+exec runuser -u calls -- env LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" "$@"

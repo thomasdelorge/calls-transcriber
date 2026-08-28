@@ -29,6 +29,7 @@ const (
 	LiveCaptionsNumTranscribersDefault          = 1
 	LiveCaptionsNumThreadsPerTranscriberDefault = 2
 	LiveCaptionsLanguageDefault                 = "en"
+	LiveCaptionsRNNTRightContextDefault         = 3 // 320ms chunks: (R+1)*80ms
 )
 
 type OutputFormat string
@@ -53,6 +54,7 @@ const (
 	TranscribeAPIWhisperCPP    = "whisper.cpp"
 	TranscribeAPIOpenAIWhisper = "openai/whisper"
 	TranscribeAPIAzure         = "azure"
+	TranscribeAPIParakeet      = "parakeet"
 )
 
 type OutputOptions struct {
@@ -82,6 +84,13 @@ type CallTranscriberConfig struct {
 	LiveCaptionsNumTranscribers          int
 	LiveCaptionsNumThreadsPerTranscriber int
 	LiveCaptionsLanguage                 string
+	// LiveCaptionsRNNTRightContext is Nemotron cache-aware right context in 80ms frames.
+	// 1=160ms, 3=320ms, 6=560ms. Unused for Whisper.
+	LiveCaptionsRNNTRightContext int
+
+	// ASRLanguage is the optional post-call language prompt (BCP-47 or ISO 639-1).
+	// Empty means auto-detect. Override via ASR_LANGUAGE / MM_CALLS_TRANSCRIBER_ASR_LANGUAGE.
+	ASRLanguage string
 }
 
 func (p ModelSize) IsValid() bool {
@@ -95,7 +104,7 @@ func (p ModelSize) IsValid() bool {
 
 func (a TranscribeAPI) IsValid() bool {
 	switch a {
-	case TranscribeAPIWhisperCPP, TranscribeAPIOpenAIWhisper, TranscribeAPIAzure:
+	case TranscribeAPIWhisperCPP, TranscribeAPIOpenAIWhisper, TranscribeAPIAzure, TranscribeAPIParakeet:
 		return true
 	default:
 		return false
@@ -230,6 +239,9 @@ func (cfg *CallTranscriberConfig) SetDefaults() {
 	if cfg.LiveCaptionsLanguage == "" {
 		cfg.LiveCaptionsLanguage = LiveCaptionsLanguageDefault
 	}
+	if cfg.LiveCaptionsRNNTRightContext == 0 {
+		cfg.LiveCaptionsRNNTRightContext = LiveCaptionsRNNTRightContextDefault
+	}
 }
 
 func (cfg CallTranscriberConfig) ToEnv() []string {
@@ -248,6 +260,8 @@ func (cfg CallTranscriberConfig) ToEnv() []string {
 		fmt.Sprintf("LIVE_CAPTIONS_NUM_TRANSCRIBERS=%d", cfg.LiveCaptionsNumTranscribers),
 		fmt.Sprintf("LIVE_CAPTIONS_NUM_THREADS_PER_TRANSCRIBER=%d", cfg.LiveCaptionsNumThreadsPerTranscriber),
 		fmt.Sprintf("LIVE_CAPTIONS_LANGUAGE=%s", cfg.LiveCaptionsLanguage),
+		fmt.Sprintf("LIVE_CAPTIONS_RNNT_RIGHT_CONTEXT=%d", cfg.LiveCaptionsRNNTRightContext),
+		fmt.Sprintf("ASR_LANGUAGE=%s", cfg.ASRLanguage),
 	}
 
 	if cfg.TranscribeAPIOptions != nil {
@@ -287,6 +301,8 @@ func (cfg CallTranscriberConfig) ToMap() map[string]any {
 		"live_captions_num_transcribers": cfg.LiveCaptionsNumTranscribers,
 		"live_captions_language":         cfg.LiveCaptionsLanguage,
 		"live_captions_num_threads_per_transcriber": cfg.LiveCaptionsNumThreadsPerTranscriber,
+		"live_captions_rnnt_right_context":          cfg.LiveCaptionsRNNTRightContext,
+		"asr_language":                              cfg.ASRLanguage,
 	}
 
 	for k, v := range cfg.OutputOptions.WebVTT.ToMap() {
@@ -338,6 +354,15 @@ func (cfg *CallTranscriberConfig) FromMap(m map[string]any) *CallTranscriberConf
 	if language, ok := m["live_captions_language"].(string); ok {
 		cfg.LiveCaptionsLanguage = language
 	}
+	if asrLang, ok := m["asr_language"].(string); ok {
+		cfg.ASRLanguage = asrLang
+	}
+	switch m["live_captions_rnnt_right_context"].(type) {
+	case int:
+		cfg.LiveCaptionsRNNTRightContext = m["live_captions_rnnt_right_context"].(int)
+	case float64:
+		cfg.LiveCaptionsRNNTRightContext = int(m["live_captions_rnnt_right_context"].(float64))
+	}
 
 	if api, ok := m["transcribe_api"].(string); ok {
 		cfg.TranscribeAPI = TranscribeAPI(api)
@@ -380,6 +405,8 @@ func FromEnv() (CallTranscriberConfig, error) {
 	cfg.LiveCaptionsNumTranscribers, _ = strconv.Atoi(os.Getenv("LIVE_CAPTIONS_NUM_TRANSCRIBERS"))
 	cfg.LiveCaptionsNumThreadsPerTranscriber, _ = strconv.Atoi(os.Getenv("LIVE_CAPTIONS_NUM_THREADS_PER_TRANSCRIBER"))
 	cfg.LiveCaptionsLanguage = os.Getenv("LIVE_CAPTIONS_LANGUAGE")
+	cfg.ASRLanguage = os.Getenv("ASR_LANGUAGE")
+	cfg.LiveCaptionsRNNTRightContext, _ = strconv.Atoi(os.Getenv("LIVE_CAPTIONS_RNNT_RIGHT_CONTEXT"))
 
 	if val := os.Getenv("TRANSCRIBE_API"); val != "" {
 		cfg.TranscribeAPI = TranscribeAPI(val)

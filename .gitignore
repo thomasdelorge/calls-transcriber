@@ -4,6 +4,9 @@ dist/
 # whisper models
 /models
 
+# Parakeet / Nemotron GGUF (docker-build-parakeet)
+.cache/
+
 # temporary track files
 tracks/
 

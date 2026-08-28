@@ -1,0 +1,16 @@
+Parakeet TDT 0.6B v3
+License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+https://creativecommons.org/licenses/by/4.0/
+
+Nemotron 3.5 ASR Streaming 0.6B
+License: OpenMDW 1.1
+https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+https://openmdw.ai/license/1-1/
+
+NeMo-Speech.cpp
+License: Apache-2.0
+https://github.com/NVIDIA/NeMo-Speech.cpp
+
+The GGUF weights are redistributed in the dedicated Parakeet Docker image
+for local inference. Keep this notice with any redistribution of the image.

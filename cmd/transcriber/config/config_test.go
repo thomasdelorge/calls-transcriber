@@ -335,6 +335,7 @@ func TestConfigSetDefaults(t *testing.T) {
 			LiveCaptionsNumThreadsPerTranscriber: 2,
 			LiveCaptionsModelSize:                LiveCaptionsModelSizeDefault,
 			LiveCaptionsLanguage:                 LiveCaptionsLanguageDefault,
+			LiveCaptionsRNNTRightContext:         LiveCaptionsRNNTRightContextDefault,
 			OutputOptions: OutputOptions{
 				WebVTT: transcribe.WebVTTOptions{
 					OmitSpeaker: false,
@@ -363,6 +364,7 @@ func TestConfigSetDefaults(t *testing.T) {
 			LiveCaptionsNumThreadsPerTranscriber: 2,
 			LiveCaptionsModelSize:                LiveCaptionsModelSizeDefault,
 			LiveCaptionsLanguage:                 LiveCaptionsLanguageDefault,
+			LiveCaptionsRNNTRightContext:         LiveCaptionsRNNTRightContextDefault,
 			OutputOptions: OutputOptions{
 				WebVTT: transcribe.WebVTTOptions{
 					OmitSpeaker: false,
@@ -464,6 +466,8 @@ func TestCallTranscriberConfigToEnv(t *testing.T) {
 		"LIVE_CAPTIONS_NUM_TRANSCRIBERS=1",
 		"LIVE_CAPTIONS_NUM_THREADS_PER_TRANSCRIBER=1",
 		"LIVE_CAPTIONS_LANGUAGE=nl",
+		"LIVE_CAPTIONS_RNNT_RIGHT_CONTEXT=3",
+		"ASR_LANGUAGE=",
 		"WEBVTT_OMIT_SPEAKER=false",
 		"TEXT_COMPACT_SILENCE_THRESHOLD_MS=2000",
 		"TEXT_COMPACT_MAX_SEGMENT_DURATION_MS=10000",
