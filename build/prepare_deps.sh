@@ -58,14 +58,16 @@ if [ ! -e "opus-${OPUS_VERSION}/.libs/libopus.so" ] && [ ! -e "opus-${OPUS_VERSI
 	(cd "opus-${OPUS_VERSION}" && ./configure && make -j4)
 fi
 
-fetch "https://github.com/ggerganov/whisper.cpp/archive/refs/tags/v${WHISPER_VERSION}.tar.gz" "v${WHISPER_VERSION}.tar.gz" "${WHISPER_SHA}"
-if ! compgen -G "whisper.cpp-${WHISPER_VERSION}/build/src/libwhisper*" > /dev/null; then
-	tar xf "v${WHISPER_VERSION}.tar.gz"
-	cd "whisper.cpp-${WHISPER_VERSION}"
-	for model in ${MODELS}; do ./models/download-ggml-model.sh "${model}"; done
-	PATH="$PATH:$CMAKE_PATH" cmake -B build ${CMAKE_ARGS}
-	PATH="$PATH:$CMAKE_PATH" cmake --build build -j --config Release
-	cd "$DEPS_DIR"
+if [ "${SKIP_WHISPER:-0}" != "1" ]; then
+	fetch "https://github.com/ggerganov/whisper.cpp/archive/refs/tags/v${WHISPER_VERSION}.tar.gz" "v${WHISPER_VERSION}.tar.gz" "${WHISPER_SHA}"
+	if ! compgen -G "whisper.cpp-${WHISPER_VERSION}/build/src/libwhisper*" > /dev/null; then
+		tar xf "v${WHISPER_VERSION}.tar.gz"
+		cd "whisper.cpp-${WHISPER_VERSION}"
+		for model in ${MODELS}; do ./models/download-ggml-model.sh "${model}"; done
+		PATH="$PATH:$CMAKE_PATH" cmake -B build ${CMAKE_ARGS}
+		PATH="$PATH:$CMAKE_PATH" cmake --build build -j --config Release
+		cd "$DEPS_DIR"
+	fi
 fi
 
 fetch "https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_VERSION}/onnxruntime-linux-${ONNX_ARCH}-${ONNX_VERSION}.tgz" "onnxruntime-linux-${ONNX_ARCH}-${ONNX_VERSION}.tgz" "${ONNX_SHA}"

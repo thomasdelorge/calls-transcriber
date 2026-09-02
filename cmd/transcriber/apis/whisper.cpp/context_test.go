@@ -1,3 +1,5 @@
+//go:build !nemospeech
+
 package whisper
 
 import (

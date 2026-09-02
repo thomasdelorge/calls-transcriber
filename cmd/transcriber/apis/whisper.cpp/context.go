@@ -1,3 +1,5 @@
+//go:build !nemospeech
+
 package whisper
 
 // #cgo linux LDFLAGS: -lwhisper -lm -lstdc++ -fopenmp

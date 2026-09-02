@@ -175,6 +175,9 @@ func (cfg CallTranscriberConfig) IsValid() error {
 		if cfg.TranscribeAPI == TranscribeAPIParakeet && !nemospeech.Available {
 			return fmt.Errorf("TranscribeAPI %q is not available in this build", cfg.TranscribeAPI)
 		}
+		if cfg.TranscribeAPI == TranscribeAPIWhisperCPP && nemospeech.Available {
+			return fmt.Errorf("TranscribeAPI %q is not linked in the Parakeet image", cfg.TranscribeAPI)
+		}
 		numCPU := runtime.NumCPU()
 		if cfg.NumThreads < 1 || cfg.NumThreads > numCPU {
 			return fmt.Errorf("NumThreads should be in the range [1, %d]", numCPU)

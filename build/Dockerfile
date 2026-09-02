@@ -47,11 +47,12 @@ WORKDIR /src
 RUN --mount=type=cache,id=prepare-deps-${TARGETARCH},target=/cache/deps \
     --mount=type=cache,id=ccache-${TARGETARCH},target=/root/.ccache \
     DEPS_DIR=/cache/deps \
+    SKIP_WHISPER=${NEMOSPEECH} \
     /bin/bash ./build/prepare_deps.sh ${OPUS_VERSION} ${OPUS_SHA} ${WHISPER_VERSION} ${WHISPER_SHA} "${WHISPER_MODELS}" ${ONNX_VERSION} ${TARGETARCH} ${AZURE_SDK_VERSION} ${AZURE_SDK_SHA} && \
     cp -a /cache/deps/opus-${OPUS_VERSION} /tmp/ && \
-    cp -a /cache/deps/whisper.cpp-${WHISPER_VERSION} /tmp/ && \
     cp -a /cache/deps/onnxruntime-linux-${ONNX_VERSION} /tmp/ && \
-    cp -a /cache/deps/SpeechSDK-Linux-${AZURE_SDK_VERSION} /tmp/
+    cp -a /cache/deps/SpeechSDK-Linux-${AZURE_SDK_VERSION} /tmp/ && \
+    if [ "$NEMOSPEECH" != "1" ]; then cp -a /cache/deps/whisper.cpp-${WHISPER_VERSION} /tmp/; fi
 
 # hadolint ignore=DL3008
 RUN --mount=type=cache,id=nemo-src-v3-${TARGETARCH},target=/tmp/NeMo-Speech.cpp \
@@ -117,7 +118,6 @@ RUN --mount=type=cache,id=parakeet-gguf-${TARGETARCH},target=/cache/parakeet-ggu
 FROM base AS runner-nemo
 ARG TARGETOS
 ARG TARGETARCH
-ARG WHISPER_VERSION
 ARG ONNX_VERSION
 ARG AZURE_SDK_VERSION
 # hadolint ignore=DL3008
@@ -126,7 +126,6 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/dist/calls-transcriber-${TARGETOS}-${TARGETARCH} /opt/calls-transcriber/bin/calls-transcriber
-COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/models /models
 COPY --from=parakeet-gguf /models/ /models/
 COPY --from=builder /opt/nemo-speech /opt/nemo-speech
 COPY --from=builder /tmp/onnxruntime-linux-${ONNX_VERSION}/lib/* /usr/lib/
@@ -135,14 +134,10 @@ COPY --from=builder /src/build/models/silero_vad.onnx /models
 COPY --from=builder /src/build/licenses /opt/calls-transcriber/licenses
 COPY --from=builder /src/build/entrypoint.sh .
 COPY --from=builder /src/build/fix_parakeet_libs.sh /tmp/fix_parakeet_libs.sh
-RUN mkdir -p /tmp/whisper-import
-COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/build/src/libwhisper* /tmp/whisper-import/
-COPY --from=builder /tmp/whisper.cpp-${WHISPER_VERSION}/build/ggml/src/libggml* /tmp/whisper-import/
 RUN /bin/bash /tmp/fix_parakeet_libs.sh \
-    /tmp/whisper-import \
     /opt/nemo-speech \
     /opt/calls-transcriber/bin/calls-transcriber && \
-    rm -rf /tmp/whisper-import /tmp/fix_parakeet_libs.sh
+    rm -f /tmp/fix_parakeet_libs.sh
 RUN ldconfig
 
 ENTRYPOINT ["./entrypoint.sh"]
