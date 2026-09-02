@@ -50,9 +50,11 @@ ONNX_VERSION ?= "1.18.1"
 AZURE_SDK_VERSION ?= "1.38.0"
 AZURE_SDK_SHA ?= "26bbab32e16128c02af3b0f12640b15d13d969ec6dc748153004e380ff4c69d0"
 # NeMo-Speech.cpp (Parakeet / Nemotron). Empty = not compiled in.
-# Uses the official CPU SDK archive, not a source build.
+# Docker image: source build, AVX2 ggml (official x86_64-cpu tarball SIGILLs on AVX2-only CPUs).
+# CI compile-check still unpacks the NVIDIA archive (PREBUILT=1).
 NEMOSPEECH ?=
 NEMO_SPEECH_VERSION ?= "0.1.0"
+NEMO_SPEECH_GIT_SHA ?= "4f9676226f667d14608487df744f375db87127f8"
 NEMO_SPEECH_SHA_AMD64 ?= "0f74131d631ad2c694cf0ec53490866bb6461147959589a69fb6fc231944065b"
 NEMO_SPEECH_SHA_ARM64 ?= "0e4112255d566de7bdd142f239e984995c4447103ba8feb41f2bb5c559d561d3"
 
@@ -261,6 +263,7 @@ docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcr
 	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
 	--build-arg NEMOSPEECH=1 \
 	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
+	--build-arg NEMO_SPEECH_GIT_SHA=${NEMO_SPEECH_GIT_SHA} \
 	--build-arg NEMO_SPEECH_SHA_AMD64=${NEMO_SPEECH_SHA_AMD64} \
 	--build-arg NEMO_SPEECH_SHA_ARM64=${NEMO_SPEECH_SHA_ARM64} \
 	--build-arg PARAKEET_MODELS_MODE=${PARAKEET_MODELS_MODE} \
@@ -291,6 +294,7 @@ docker-push-parakeet: ## push runner-nemo to IMAGE (registry output)
 	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
 	--build-arg NEMOSPEECH=1 \
 	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
+	--build-arg NEMO_SPEECH_GIT_SHA=${NEMO_SPEECH_GIT_SHA} \
 	--build-arg NEMO_SPEECH_SHA_AMD64=${NEMO_SPEECH_SHA_AMD64} \
 	--build-arg NEMO_SPEECH_SHA_ARM64=${NEMO_SPEECH_SHA_ARM64} \
 	--build-arg PARAKEET_MODELS_MODE=download \

@@ -13,7 +13,7 @@ case "$ARCH" in
 esac
 
 sudo mkdir -p /opt/nemo-speech
-sudo bash ./build/prepare_nemospeech.sh "$NEMO_SPEECH_VERSION" /opt/nemo-speech "$ARCH" "$NEMO_SHA"
+sudo PREBUILT=1 bash ./build/prepare_nemospeech.sh "$NEMO_SPEECH_VERSION" /opt/nemo-speech "$ARCH" "$NEMO_SHA"
 
 export CGO_ENABLED=1
 go build -mod=readonly -tags nemospeech ./cmd/transcriber/apis/nemospeech/...

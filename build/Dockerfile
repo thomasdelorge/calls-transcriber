@@ -37,6 +37,7 @@ ARG AZURE_SDK_VERSION
 ARG AZURE_SDK_SHA
 ARG NEMOSPEECH=0
 ARG NEMO_SPEECH_VERSION=0.1.0
+ARG NEMO_SPEECH_GIT_SHA=4f9676226f667d14608487df744f375db87127f8
 ARG NEMO_SPEECH_SHA_AMD64=0f74131d631ad2c694cf0ec53490866bb6461147959589a69fb6fc231944065b
 ARG NEMO_SPEECH_SHA_ARM64=0e4112255d566de7bdd142f239e984995c4447103ba8feb41f2bb5c559d561d3
 # download = wget into BuildKit cache (CI/upstream); host = extra build-context (local .cache)
@@ -54,12 +55,16 @@ RUN --mount=type=cache,id=prepare-deps-${TARGETARCH},target=/cache/deps \
     cp -a /cache/deps/onnxruntime-linux-${ONNX_VERSION} /tmp/ && \
     cp -a /cache/deps/SpeechSDK-Linux-${AZURE_SDK_VERSION} /tmp/
 
-RUN if [ "$NEMOSPEECH" = "1" ]; then \
-        case "${TARGETARCH}" in \
-            arm64|aarch64) NEMO_SHA="${NEMO_SPEECH_SHA_ARM64}" ;; \
-            *) NEMO_SHA="${NEMO_SPEECH_SHA_AMD64}" ;; \
-        esac && \
-        /bin/bash ./build/prepare_nemospeech.sh ${NEMO_SPEECH_VERSION} /opt/nemo-speech ${TARGETARCH} "${NEMO_SHA}"; \
+# hadolint ignore=DL3008
+RUN --mount=type=cache,id=nemo-src-${TARGETARCH},target=/tmp/NeMo-Speech.cpp \
+    --mount=type=cache,id=ccache-${TARGETARCH},target=/root/.ccache \
+    --mount=type=cache,id=prepare-deps-${TARGETARCH},target=/cache/deps \
+    if [ "$NEMOSPEECH" = "1" ]; then \
+        apt-get update && \
+        apt-get install --no-install-recommends -y git ninja-build g++ pkg-config libsentencepiece-dev && \
+        DEPS_DIR=/cache/deps \
+        /bin/bash ./build/prepare_nemospeech.sh ${NEMO_SPEECH_VERSION} /opt/nemo-speech ${TARGETARCH} "${NEMO_SPEECH_GIT_SHA}"; \
+        apt-get clean && rm -rf /var/lib/apt/lists/*; \
     fi
 
 RUN --mount=type=cache,id=parakeet-gguf-${TARGETARCH},target=/cache/parakeet-gguf \
