@@ -97,6 +97,9 @@ if [ "$HEAD" != "$NEMO_PIN" ]; then
 fi
 git submodule update --init --depth 1 ggml
 
+# Drop a cached cpu-asr tree compiled -march=native on the GHA runner.
+rm -rf "$SRC_DIR/build"
+
 GGML_CPU_FLAGS=(
 	-DGGML_NATIVE=OFF
 	-DGGML_AVX512=OFF
@@ -108,6 +111,8 @@ GGML_CPU_FLAGS=(
 )
 if [ "$ARCH" = "x86_64" ]; then
 	GGML_CPU_FLAGS+=(
+		-DCMAKE_C_FLAGS=-march=x86-64-v3
+		-DCMAKE_CXX_FLAGS=-march=x86-64-v3
 		-DGGML_AVX=ON
 		-DGGML_AVX2=ON
 		-DGGML_FMA=ON
@@ -153,13 +158,13 @@ done
 test -f "$PREFIX/include/nemo_speech/asr.h"
 test -f "$PREFIX/lib/libnemo_speech_asr_c.so"
 
-# Refuse an AVX-512 text dump in ggml CPU objects (the SIGILL we hit with the tarball).
+# Any %zmm / EVEX in the installed tree SIGILLs on AVX2-only hosts (N100).
 if [ "$ARCH" = "x86_64" ]; then
 	found=0
-	for so in "$PREFIX"/lib/libggml*.so*; do
-		[[ -e "$so" ]] || continue
-		if objdump -d "$so" 2>/dev/null | grep -Eq 'vmovdqa32|vpcmpeqd[[:space:]]+%zmm'; then
-			echo "AVX-512 codegen in $so; GGML_AVX512 did not stick" >&2
+	for so in "$PREFIX"/lib/*.so*; do
+		[[ -f "$so" && ! -L "$so" ]] || continue
+		if objdump -d "$so" 2>/dev/null | grep -Eq '%zmm'; then
+			echo "AVX-512 codegen (%zmm) in $so" >&2
 			found=1
 		fi
 	done
