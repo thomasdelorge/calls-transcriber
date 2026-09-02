@@ -24,13 +24,15 @@ set_rpath_origin() {
 }
 
 required_glibcxx() {
+	# LC_ALL=C lexicographic sort: comm(1) rejects sort -V order
+	# (GLIBCXX_3.4.9 vs 3.4.10).
 	objdump -p "$1" 2>/dev/null | sed -n '/Version References:/,/^[[:space:]]*$/p' \
-		| grep -oE 'GLIBCXX_[0-9.]+' | sort -Vu
+		| grep -oE 'GLIBCXX_[0-9.]+' | LC_ALL=C sort -u || true
 }
 
 provided_glibcxx() {
 	objdump -p "$1" 2>/dev/null | sed -n '/Version definitions:/,/^[[:space:]]*$/p' \
-		| grep -oE 'GLIBCXX_[0-9.]+' | sort -Vu
+		| grep -oE 'GLIBCXX_[0-9.]+' | LC_ALL=C sort -u || true
 }
 
 verify_nemo_glibcxx() {
@@ -42,7 +44,7 @@ verify_nemo_glibcxx() {
 		exit 1
 	fi
 
-	missing=$(comm -23 <(required_glibcxx "$lib") <(provided_glibcxx "$NEMO_STDCXX"))
+	missing=$(LC_ALL=C comm -23 <(required_glibcxx "$lib") <(provided_glibcxx "$NEMO_STDCXX"))
 	if [[ -n "$missing" ]]; then
 		echo "NeMo requires GLIBCXX versions not provided by bundled libstdc++:" >&2
 		echo "$missing" >&2
@@ -53,7 +55,7 @@ verify_nemo_glibcxx() {
 		echo "system libstdc++ missing at ${SYSTEM_STDCXX}" >&2
 		exit 1
 	fi
-	missing=$(comm -23 <(required_glibcxx "$lib") <(provided_glibcxx "$SYSTEM_STDCXX"))
+	missing=$(LC_ALL=C comm -23 <(required_glibcxx "$lib") <(provided_glibcxx "$SYSTEM_STDCXX"))
 	if [[ -n "$missing" ]]; then
 		echo "NeMo requires GLIBCXX versions absent from base image libstdc++;" >&2
 		echo "bundled runtimes in ${NEMO_PREFIX}/lib are required:" >&2
