@@ -181,7 +181,11 @@ func (cfg CallTranscriberConfig) IsValid() error {
 		}
 
 		if cfg.LiveCaptionsOn {
-			if cfg.LiveCaptionsNumTranscribers < 1 || cfg.LiveCaptionsNumThreadsPerTranscriber < 1 ||
+			if cfg.TranscribeAPI == TranscribeAPIParakeet {
+				if cfg.LiveCaptionsNumTranscribers < 1 {
+					return fmt.Errorf("LiveCaptionsNumTranscribers should be in the range [1, %d]", numCPU)
+				}
+			} else if cfg.LiveCaptionsNumTranscribers < 1 || cfg.LiveCaptionsNumThreadsPerTranscriber < 1 ||
 				cfg.LiveCaptionsNumTranscribers*cfg.LiveCaptionsNumThreadsPerTranscriber > numCPU {
 				return fmt.Errorf("LiveCaptionsNumTranscribers * LiveCaptionsNumThreadsPerTranscriber should be in the range [1, %d]", numCPU)
 			}
