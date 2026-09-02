@@ -104,4 +104,11 @@ ldd "$BIN" | grep -q "${NEMO_PREFIX}/lib/libnemo_speech_asr" || {
 	exit 1
 }
 
+missing=$(ldd "$BIN" | awk '/not found/ {print}' || true)
+if [[ -n "$missing" ]]; then
+	echo "calls-transcriber has unresolved shared libraries:" >&2
+	echo "$missing" >&2
+	exit 1
+fi
+
 echo "parakeet lib isolation OK"

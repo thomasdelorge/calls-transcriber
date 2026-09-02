@@ -125,7 +125,8 @@ if command -v ccache >/dev/null 2>&1; then
 	)
 fi
 
-# cpu-asr + extras: shared C ABI only, portable ggml, no CLI/mic/diar.
+# cpu-asr links Debian's shared sentencepiece (NVIDIA's tarball uses a static
+# .a). runner-nemo must install libsentencepiece0; cmake --install does not.
 cmake --preset cpu-asr \
 	-DBUILD_SHARED_LIBS=ON \
 	-DNEMO_SPEECH_BUILD_CLI=OFF \
