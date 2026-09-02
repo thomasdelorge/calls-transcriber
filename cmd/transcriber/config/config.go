@@ -164,9 +164,6 @@ func (cfg CallTranscriberConfig) IsValid() error {
 	if !cfg.TranscribeAPI.IsValid() {
 		return fmt.Errorf("TranscribeAPI value is not valid")
 	}
-	if cfg.TranscribeAPI == TranscribeAPIParakeet && !nemospeech.Available {
-		return fmt.Errorf("TranscribeAPI %q is not available in this build", cfg.TranscribeAPI)
-	}
 	if !cfg.ModelSize.IsValid() {
 		return fmt.Errorf("ModelSize value is not valid")
 	}
@@ -175,6 +172,9 @@ func (cfg CallTranscriberConfig) IsValid() error {
 	}
 
 	if inTranscriber == "true" {
+		if cfg.TranscribeAPI == TranscribeAPIParakeet && !nemospeech.Available {
+			return fmt.Errorf("TranscribeAPI %q is not available in this build", cfg.TranscribeAPI)
+		}
 		numCPU := runtime.NumCPU()
 		if cfg.NumThreads < 1 || cfg.NumThreads > numCPU {
 			return fmt.Errorf("NumThreads should be in the range [1, %d]", numCPU)
