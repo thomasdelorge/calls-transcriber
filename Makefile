@@ -269,6 +269,35 @@ docker-build-parakeet: parakeet-models ## to build the Parakeet/Nemotron transcr
 	-t calls-transcriber:parakeet || ${FAIL}
 	@$(OK) Built calls-transcriber:master and calls-transcriber:parakeet
 
+# CI: IMAGE=ghcr.io/<owner>/calls-transcriber:vX.Y.Z
+.PHONY: docker-push-parakeet
+docker-push-parakeet: ## push runner-nemo to IMAGE (registry output)
+	@test -n "$(IMAGE)" || (echo "IMAGE is required" && exit 1)
+	mkdir -p .cache/parakeet-models
+	@$(INFO) Pushing Parakeet transcriber image ${IMAGE}
+	$(AT)$(DOCKER) buildx build \
+	--platform linux/amd64 \
+	--output=type=registry \
+	--target runner-nemo \
+	--build-context parakeet-models=.cache/parakeet-models \
+	--build-arg GO_VERSION=${GO_VERSION} \
+	--build-arg OPUS_VERSION=${OPUS_VERSION} \
+	--build-arg OPUS_SHA=${OPUS_SHA} \
+	--build-arg WHISPER_VERSION=${WHISPER_VERSION} \
+	--build-arg WHISPER_SHA=${WHISPER_SHA} \
+	--build-arg WHISPER_MODELS=${WHISPER_MODELS} \
+	--build-arg ONNX_VERSION=${ONNX_VERSION} \
+	--build-arg AZURE_SDK_VERSION=${AZURE_SDK_VERSION} \
+	--build-arg AZURE_SDK_SHA=${AZURE_SDK_SHA} \
+	--build-arg NEMOSPEECH=1 \
+	--build-arg NEMO_SPEECH_VERSION=${NEMO_SPEECH_VERSION} \
+	--build-arg NEMO_SPEECH_SHA_AMD64=${NEMO_SPEECH_SHA_AMD64} \
+	--build-arg NEMO_SPEECH_SHA_ARM64=${NEMO_SPEECH_SHA_ARM64} \
+	--build-arg PARAKEET_MODELS_MODE=download \
+	-f ${DOCKER_FILE} . \
+	-t ${IMAGE} || ${FAIL}
+	@$(OK) Pushed ${IMAGE}
+
 .PHONY: ci-nemospeech
 ci-nemospeech: ## compile-check nemospeech cgo (CI)
 	/bin/bash ./build/ci_nemospeech.sh

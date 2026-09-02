@@ -1,100 +1,54 @@
-on: [push]
-name: CI
+name: Publish image
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (e.g. v0.8.0). Empty = git ref name."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  lint:
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-
+  ghcr:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 180
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-    - name: Lint code
-      run: |
-        make go-lint
+      - uses: actions/checkout@v4
 
-  test:
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+      - uses: docker/setup-buildx-action@v3
 
-    runs-on: ubuntu-latest
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-    - name: Execute Tests
-      run: |
-        go mod download
-        go mod verify
-        make test
+      - name: Image name
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER}/calls-transcriber:${TAG}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-  test-nemospeech:
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
+      - name: Build and push
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+        run: make docker-push-parakeet
 
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: go.mod
-    - name: Compile-check nemospeech
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget ca-certificates
-        make ci-nemospeech
-
-  test-nemospeech-arm64:
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-
-    runs-on: ubuntu-24.04-arm
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: go.mod
-    - name: Compile-check nemospeech
-      env:
-        ARCH: arm64
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget ca-certificates
-        make ci-nemospeech
-
-  test-arm64:
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-
-    runs-on: ubuntu-24.04-arm
-
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-      with:
-        path: ${{ github.workspace }}/src/github.com/${{ github.repository }}
-    - name: Execute Tests
-      run: |
-        go mod download
-        go mod verify
-        make test
+      - name: Tag latest
+        if: github.event_name == 'push'
+        run: |
+          docker buildx imagetools create \
+            -t "ghcr.io/${GITHUB_REPOSITORY_OWNER}/calls-transcriber:latest" \
+            "${{ steps.meta.outputs.image }}"
